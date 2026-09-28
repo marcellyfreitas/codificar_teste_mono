@@ -21,7 +21,15 @@ class TicketController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['status', 'priority', 'user_id', 'assignee_id', 'search']);
+        $filters = $request->only([
+            'status',
+            'priority',
+            'user_id',
+            'assignee_id',
+            'search',
+            'created_from',
+            'created_to',
+        ]);
 
         $perPage = min(max($request->integer('per_page', 15), 1), 100);
 

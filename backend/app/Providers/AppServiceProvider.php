@@ -6,6 +6,7 @@ use App\Models\Ticket;
 use App\Policies\TicketPolicy;
 use App\Services\AuthService;
 use App\Services\TicketService;
+use App\Services\UserService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -19,6 +20,10 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(AuthService::class, function ($app) {
             return new AuthService;
+        });
+
+        $this->app->singleton(UserService::class, function ($app) {
+            return new UserService;
         });
     }
 

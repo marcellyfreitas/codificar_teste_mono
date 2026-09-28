@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -10,6 +11,7 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
+        Route::get('/users', [UserController::class, 'index']);
     });
 
     Route::prefix('tickets')->middleware('auth:sanctum')->name('tickets')->group(function () {

@@ -6,6 +6,7 @@ use App\Enums\TicketStatus;
 use App\Enums\UserRole;
 use App\Models\Ticket;
 use App\Models\User;
+use DateTimeImmutable;
 use Exception;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,8 @@ class TicketService
         $search = $this->filterValue($filters, 'search');
         $userId = $this->filterValue($filters, 'user_id');
         $assigneeId = $this->filterValue($filters, 'assignee_id');
+        $createdFrom = $this->filterDate($filters, 'created_from');
+        $createdTo = $this->filterDate($filters, 'created_to');
 
         if ($status !== null) {
             $query->where('status', $status);
@@ -43,6 +46,17 @@ class TicketService
                 $q->where('title', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%");
             });
+        }
+
+        // Inclusivo nas duas pontas: `created_to=2026-09-28` inclui o dia
+        // inteiro. `whereDate` compara a data, nao o instante, que e o que o
+        // usuario espera de um filtro por dia.
+        if ($createdFrom !== null) {
+            $query->whereDate('created_at', '>=', $createdFrom);
+        }
+
+        if ($createdTo !== null) {
+            $query->whereDate('created_at', '<=', $createdTo);
         }
 
         return $query->latest()->paginate($perPage);
@@ -246,5 +260,31 @@ class TicketService
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
+    }
+
+    /**
+     * Data que nao e `YYYY-MM-DD` de verdade e ignorada, nao recusada — a mesma
+     * convencao que o `ctype_digit` ja aplica a `user_id` e `assignee_id`. Um
+     * filtro com garbage no meio de um quadro nao pode derrubar a requisicao.
+     *
+     * O round-trip contra `format()` e o que separa `2026-09-28` de
+     * `2026-13-45`: o `createFromFormat` aceita os dois e rola o segundo para
+     * um dia valido de outro mes.
+     */
+    private function filterDate(array $filters, string $key): ?string
+    {
+        $value = $this->filterValue($filters, $key);
+
+        if ($value === null) {
+            return null;
+        }
+
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        if ($date === false || $date->format('Y-m-d') !== $value) {
+            return null;
+        }
+
+        return $value;
     }
 }
