@@ -1,18 +1,9 @@
 import type { Registration } from '../ports/auth-repository'
 
-/**
- * Regras espelhando os Form Requests do backend, campo a campo.
- *
- * A duplicação é deliberada: o backend valida de novo, e um formulário que
- * só reage ao 422 deixa o usuário esperando uma ida ao servidor para saber que
- * o e-mail está errado. A validação local é conforto, não autoridade.
- */
-
 const EMAIL_MAX = 255
 const NAME_MAX = 255
 const PASSWORD_MIN = 8
 
-/** Regex deliberadamente permissiva, como a do Laravel: `email:rfc`. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function validateEmail(value: string): string | null {
@@ -75,14 +66,6 @@ export interface LoginDraft {
   password: string,
 }
 
-/**
- * Erros por campo, sempre como lista.
- *
- * A lista é o formato nativo: o Laravel devolve `errors: { campo: [msg] }` e o
- * `FieldError` do shadcn recebe `string[]`. Tipar como `string` obrigaria a
- * embrulhar de um lado e desembrulhar do outro, e a mensagem apareceria
- * embrulhada num array dentro do `<li>` em vez de sozinha.
- */
 export type LoginErrors = Partial<Record<keyof LoginDraft, string[]>>
 
 export function validateLogin(draft: LoginDraft): LoginErrors {
@@ -138,7 +121,6 @@ export function validateRegister(draft: RegisterDraft): RegisterErrors {
   return errors
 }
 
-/** Só envia requisição quando não há erro local. */
 export function isValid(errors: Record<string, string[] | undefined>): boolean {
   return Object.values(errors).every(
     mensagens => !mensagens || mensagens.length === 0,

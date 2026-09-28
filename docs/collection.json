@@ -1,0 +1,2122 @@
+{
+    "info": {
+        "_postman_id": "8f2b6c14-9a3e-4d51-b0c7-1f5a4d2e7b90",
+        "name": "Sistema de Chamados Internos - API (Laravel)",
+        "description": "Coleção Postman com todas as rotas da API REST do backend Laravel (`./backend`).\n\n## Como importar\n1. No Postman: **Import** -> **File** -> selecione `docs/collection.json`.\n2. As variáveis já vêm com valores padrão prontos para uso local.\n\n## Ordem sugerida\nRode as pastas em sequência, do `00` para o `03`. Os test scripts gravam os tokens automaticamente, então nenhuma configuração manual é necessária.\n\n## Autenticação\nA API usa **Laravel Sanctum** com tokens Bearer. O token de cada requisição de login é gravado na variável de coleção correspondente:\n\n| Variável | Conta | Papel | O que permite |\n|---|---|---|---|\n| `{{token}}` | `test@example.com` | `user` | criar chamados e **ler a fila** |\n| `{{gestor_token}}` | `gestor@example.com` | `gestor` | **executar** chamados: editar, excluir, ser responsável |\n| `{{admin_token}}` | `admin@example.com` | `admin` | tudo acima **+** `/balance` e `/unassign-open` |\n\nOs três tokens vêm da senha `password` e são criados pelo `UserSeeder`.\n\n> Antes dessas contas existirem, os gestores do seeder tinham e-mail aleatório, e a coleção não tinha como autenticar neles: as rotas de escrita assertavam `200`/`204` com um token de `user`, que receberia `403`.\n\n## Os dois usuários de um chamado\n| Campo | Papel | Quem define | Pode ficar nulo |\n|---|---|---|---|\n| `user_id` | **AUTOR** — quem abriu o pedido | **o token**, sempre | não |\n| `assignee_id` | **RESPONSÁVEL** — quem trata | sorteado, enviado no payload, ou esvaziado | **sim** (fila) |\n\nSão eixos independentes. \"Os chamados que eu abri\" (`?user_id=`) e \"os chamados que estão comigo\" (`?assignee_id=`) são filtros diferentes e combináveis.\n\n**O autor nunca vem do payload.** Enviar `user_id` no `POST` ou no `PUT` é descartado em silêncio — sem erro, e sem validação do valor. É a mesma razão que `role` não é preenchível no cadastro: se o autor viesse do body, qualquer autenticado abriria chamado em nome de outro.\n\n**A autoria é imutável.** Quem abriu é fato histórico, não campo editável.\n\n**Só gestor executa chamado.** O `assignee_id` tem de apontar para um `gestor` ou `admin`; um `user` comum gera `422`. É o que impede um pedido de virar tarefa de quem o fez.\n\n> `user_id` mudou de significado: antes era o **responsável** e agora é o **autor**. É uma quebra de contrato — quem usava `?user_id=` para consultar a fila de um gestor precisa passar a usar `?assignee_id=`.\n\n## Enums (valores aceitos)\n- `priority`: `low` | `medium` | `high` (padrão no banco: `medium`)\n- `status`: `open` | `in_progress` | `resolved` | `closed` (padrão no banco: `open`)\n- Status que contam como **carga de trabalho em aberto**: **`open`** e **`in_progress`**. `resolved` e `closed` saem da conta.\n\n## Atribuição automática\nAo criar um chamado **sem** `assignee_id`, o backend escolhe o **gestor com menos chamados em aberto atribuídos a ele**. A contagem é por chamado **recebido**, nunca por chamado **aberto** — abrir muitos chamados não torna ninguém mais ocupado. Empate vai para o **menor `id`**, o que torna o resultado determinístico.\n\nPara criar o chamado **na fila** (sem responsável), envie `\"auto_assign\": false`. Ele fica com autor e `assignee_id: null`.\n\n| `auto_assign` | `assignee_id` | Resultado |\n|---|---|---|\n| ausente (padrão) | ausente | atribuição automática |\n| `true` | ausente | atribuição automática |\n| `false` | ausente | `assignee_id: null` — **fila** |\n| qualquer | enviado | usa o valor informado |\n\n> `assignee_id` explícito sempre tem prioridade sobre a flag.\n\n## Permissões\n| Rota | Quem pode |\n|---|---|\n| `POST /api/v1/register` | público (sempre nasce `user`) |\n| `POST /api/v1/login` | público |\n| `GET /api/v1/me` | qualquer autenticado |\n| `GET /api/v1/tickets` | qualquer autenticado — **leitura é liberada** |\n| `POST /api/v1/tickets` | qualquer autenticado |\n| `GET /api/v1/tickets/{ticket}` | qualquer autenticado |\n| `PUT /api/v1/tickets/{ticket}` | **gestor** ou admin |\n| `DELETE /api/v1/tickets/{ticket}` | **gestor** ou admin |\n| `POST /api/v1/tickets/balance` | **admin** |\n| `POST /api/v1/tickets/unassign-open` | **admin** |\n\nA permissão de escrita é decidida **por papel**, não por vínculo com o chamado: qualquer gestor edita qualquer chamado, e um `user` comum não edita nem o próprio. A checagem mora na `TicketPolicy`, inclusive para as rotas de admin — não há middleware de papel nessas rotas.\n\n## Fila de espera\n`assignee_id: null` significa \"aguardando distribuição\". O mesmo estado acontece sozinho quando o responsável é excluído do banco.\n\n**Não existe filtro para \"sem responsável\"** — `?assignee_id=` compara com um número, então chamados na fila não aparecem nele. Para consumir a fila, use `POST /tickets/balance` (admin) ou `POST /tickets/unassign-open` seguido de `balance`.\n\n## Contas de exemplo (seed)\n| E-mail | Papel | Senha |\n|---|---|---|\n| `test@example.com` | `user` | `password` |\n| `gestor@example.com` | `gestor` | `password` |\n| `admin@example.com` | `admin` | `password` |\n\n> `base_url` vem configurada para `http://localhost:8001/api/v1`. Ajuste a variável se o backend rodar em outra porta/host.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "auth": {
+        "type": "noauth"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8001/api/v1",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "user_email",
+            "value": "test@example.com",
+            "type": "string"
+        },
+        {
+            "key": "user_password",
+            "value": "password",
+            "type": "string"
+        },
+        {
+            "key": "user_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "gestor_email",
+            "value": "gestor@example.com",
+            "type": "string"
+        },
+        {
+            "key": "gestor_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "gestor_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "admin_email",
+            "value": "admin@example.com",
+            "type": "string"
+        },
+        {
+            "key": "admin_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "admin_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "ticket_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "assignee_id",
+            "value": "",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "00 - Auth",
+            "description": "Cadastro e login. Rode estas requisições primeiro: cada uma grava um token na variável correspondente, e as pastas seguintes já o usam automaticamente.",
+            "item": [
+                {
+                    "name": "Cadastrar usuário (register)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"{{$randomFirstName}} {{$randomLastName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"{{user_password}}\",\n  \"password_confirmation\": \"{{user_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "register"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/register` — rota pública\n\nCria uma conta nova. Todo usuário registrado nasce com o papel **`user`**, e é assim que abre chamados.\n\n> O papel **não** pode ser escolhido no cadastro: enviar `role` no body é ignorado. Um `user` não pode executar chamados — para isso existe o papel `gestor`, criado pelo seeder.\n\n### Validação do payload\n| Campo | Regras |\n|---|---|\n| `name` | obrigatório, string, max 255 |\n| `email` | obrigatório, e-mail válido, único |\n| `password` | obrigatório, min 8, confirmado |\n\n### Respostas\n- `201 Created` — conta criada, token retornado\n- `422 Unprocessable Entity` — falha de validação"
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('201 Created', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('token retornado', function () {",
+                                    "    pm.expect(body.data.access_token).to.be.a('string').and.not.empty;",
+                                    "});",
+                                    "",
+                                    "if (body.data && body.data.access_token) {",
+                                    "    pm.collectionVariables.set('token', body.data.access_token);",
+                                    "}",
+                                    "if (body.data && body.data.user) {",
+                                    "    pm.collectionVariables.set('user_email', body.data.user.email);",
+                                    "    pm.collectionVariables.set('user_id', body.data.user.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": [
+                        {
+                            "name": "201 - Conta criada",
+                            "status": "Created",
+                            "code": 201,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"message\": \"Cadastro realizado com sucesso.\",\n  \"data\": {\n    \"user\": {\n      \"id\": 161,\n      \"name\": \"Ana Souza\",\n      \"email\": \"ana@example.com\",\n      \"role\": \"user\"\n    },\n    \"access_token\": \"3|abcdefghijklmnopqrstuvwxyz0123456789ABCDE\",\n    \"token_type\": \"Bearer\"\n  }\n}",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/register",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "register"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login — usuário comum (salvar token)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "login"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/login` — rota pública\n\nAutentica e retorna um token Sanctum. **O test script salva `data.access_token` em `{{token}}` e o `id` em `{{user_id}}`.**\n\nA conta `test@example.com` tem o papel **`user`**: serve para **criar** chamados e **ler** a fila, mas **não** edita, não exclui e não acessa as rotas de redistribuição. Para essas, use os tokens de gestor e admin.\n\n### Respostas\n- `200 OK`\n- `422 Unprocessable Entity` — credenciais incorretas"
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "",
+                                    "pm.test('access_token retornado', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(body.data.access_token).to.be.a('string').and.not.empty;",
+                                    "    pm.expect(body.data.token_type).to.eql('Bearer');",
+                                    "});",
+                                    "",
+                                    "pm.test('papel do usuario inesperado', function () {",
+                                    "    console.log('Papel: ' + body.data.user.role);",
+                                    "});",
+                                    "",
+                                    "if (body.data && body.data.access_token) {",
+                                    "    pm.collectionVariables.set('token', body.data.access_token);",
+                                    "}",
+                                    "",
+                                    "if (body.data && body.data.user) {",
+                                    "    pm.collectionVariables.set('user_id', body.data.user.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": [
+                        {
+                            "name": "200 - Login realizado",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"message\": \"Login realizado com sucesso.\",\n  \"data\": {\n    \"user\": {\n      \"id\": 1,\n      \"name\": \"Test User\",\n      \"email\": \"test@example.com\",\n      \"email_verified_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"role\": \"user\",\n      \"created_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"updated_at\": \"2026-09-27T12:00:00.000000Z\"\n    },\n    \"access_token\": \"2|zyxwvutsrqponmlkjihgfedcba0987654321ZYXWVUTSRQPONMLK\",\n    \"token_type\": \"Bearer\"\n  }\n}",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/login",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "login"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login — gestor (salvar token)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{gestor_email}}\",\n  \"password\": \"{{user_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "login"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/login` — rota pública\n\nAutentica a conta **`gestor@example.com`** (papel `gestor`) e salva o token em **`{{gestor_token}}`**, o `id` em `{{gestor_id}}`.\n\nO gestor é quem **executa** chamados: é o único papel elegível a ser `assignee_id`, e o único autorizado a **editar** e **excluir** chamados. Ele **não** acessa `/balance` nem `/unassign-open`, que são exclusivas de admin.\n\n> Conta criada pelo `UserSeeder`, com senha `password`."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "",
+                                    "pm.test('access_token retornado', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(body.data.access_token).to.be.a('string').and.not.empty;",
+                                    "    pm.expect(body.data.token_type).to.eql('Bearer');",
+                                    "});",
+                                    "",
+                                    "pm.test('papel do usuario inesperado', function () {",
+                                    "    console.log('Papel: ' + body.data.user.role);",
+                                    "});",
+                                    "",
+                                    "if (body.data && body.data.access_token) {",
+                                    "    pm.collectionVariables.set('gestor_token', body.data.access_token);",
+                                    "}",
+                                    "",
+                                    "if (body.data && body.data.user) {",
+                                    "    pm.collectionVariables.set('gestor_id', body.data.user.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": [
+                        {
+                            "name": "200 - Login realizado",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"message\": \"Login realizado com sucesso.\",\n  \"data\": {\n    \"user\": {\n      \"id\": 1,\n      \"name\": \"Test Gestor\",\n      \"email\": \"gestor@example.com\",\n      \"email_verified_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"role\": \"user\",\n      \"created_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"updated_at\": \"2026-09-27T12:00:00.000000Z\"\n    },\n    \"access_token\": \"2|zyxwvutsrqponmlkjihgfedcba0987654321ZYXWVUTSRQPONMLK\",\n    \"token_type\": \"Bearer\"\n  }\n}",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"gestor@example.com\",\n  \"password\": \"password\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/login",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "login"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login — administrador (salvar token)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{user_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "login"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/login` — rota pública\n\nAutentica a conta **`admin@example.com`** (papel `admin`) e salva o token em **`{{admin_token}}`**, o `id` em `{{admin_id}}`.\n\n`admin` é o único papel com acesso às rotas de redistribuição da pasta **02**. Pela hierarquia de papéis, um admin também pode ser `assignee_id` e editar/excluir chamados.\n\n> Conta criada pelo `UserSeeder`, com senha `password`."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "",
+                                    "pm.test('access_token retornado', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(body.data.access_token).to.be.a('string').and.not.empty;",
+                                    "    pm.expect(body.data.token_type).to.eql('Bearer');",
+                                    "});",
+                                    "",
+                                    "pm.test('papel do usuario inesperado', function () {",
+                                    "    console.log('Papel: ' + body.data.user.role);",
+                                    "});",
+                                    "",
+                                    "if (body.data && body.data.access_token) {",
+                                    "    pm.collectionVariables.set('admin_token', body.data.access_token);",
+                                    "}",
+                                    "",
+                                    "if (body.data && body.data.user) {",
+                                    "    pm.collectionVariables.set('admin_id', body.data.user.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": [
+                        {
+                            "name": "200 - Login realizado",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"message\": \"Login realizado com sucesso.\",\n  \"data\": {\n    \"user\": {\n      \"id\": 1,\n      \"name\": \"Test Admin\",\n      \"email\": \"admin@example.com\",\n      \"email_verified_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"role\": \"user\",\n      \"created_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"updated_at\": \"2026-09-27T12:00:00.000000Z\"\n    },\n    \"access_token\": \"2|zyxwvutsrqponmlkjihgfedcba0987654321ZYXWVUTSRQPONMLK\",\n    \"token_type\": \"Bearer\"\n  }\n}",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/login",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "login"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Usuário logado (me)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "me"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/me` — rota protegida\n\nDevolve o usuário autenticado a partir do token. Útil para conferir com que papel a requisição está saindo.\n\n### Respostas\n- `200 OK`\n- `401 Unauthenticated` — token ausente ou inválido"
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('retorna o usuario autenticado', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(body.data.email).to.eql(pm.collectionVariables.get('user_email'));",
+                                    "});",
+                                    "",
+                                    "pm.test('nunca expoe a senha', function () {",
+                                    "    pm.expect(body.data).to.not.have.property('password');",
+                                    "});",
+                                    "",
+                                    "console.log('Papel autenticado: ' + body.data.role);"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "01 - Tickets (leitura e criação)",
+            "description": "Leitura e criação de chamados com o token de **usuário comum** (`{{token}}`). Editar e excluir usam `{{gestor_token}}`.",
+            "item": [
+                {
+                    "name": "Listar chamados",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets?page=1&per_page=15",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets?page=1&per_page=15"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/tickets` — rota protegida\n\nLista paginada. A leitura é **liberada para qualquer usuário autenticado**, inclusive quem não é gestor: quem abre chamado precisa ver a fila.\n\n### Filtros\n| Parâmetro | Filtra por | Exemplo |\n|---|---|---|\n| `status` | status do chamado | `?status=open` |\n| `priority` | prioridade | `?priority=high` |\n| `user_id` | **AUTOR** — quem abriu | `?user_id=1` |\n| `assignee_id` | **RESPONSÁVEL** — quem trata | `?assignee_id=42` |\n| `search` | texto em `title` e `description` | `?search=impressora` |\n| `page`, `per_page` | paginação (`per_page` de 1 a 100) | `?per_page=50` |\n\n`user_id` e `assignee_id` são **independentes** e combináveis: `?user_id=1&assignee_id=42` devolve só os chamados que a pessoa 1 abriu **e** que a pessoa 42 trata. Um valor não numérico é ignorado em vez de gerar erro.\n\n> Um `assignee_id` nulo significa fila de espera. **Não** há filtro para \"sem responsável\" — o id é comparado com um número, então chamados na fila não aparecem em `?assignee_id=`. Para ver a fila, use `POST /tickets/balance` (admin) ou filtre no cliente."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('pagina valida', function () {",
+                                    "    pm.expect(body.data).to.be.an('array');",
+                                    "    pm.expect(body.per_page).to.be.a('number').and.to.be.within(1, 100);",
+                                    "});",
+                                    "",
+                                    "pm.test('autor e responsavel vem em campos separados', function () {",
+                                    "    if (body.data && body.data.length) {",
+                                    "        const t = body.data[0];",
+                                    "        pm.expect(t).to.have.property('user_id');",
+                                    "        pm.expect(t).to.have.property('assignee_id');",
+                                    "        pm.expect(t).to.have.property('user');",
+                                    "        pm.expect(t).to.have.property('assignee');",
+                                    "    }",
+                                    "});",
+                                    "",
+                                    "if (body.data && body.data.length) {",
+                                    "    pm.collectionVariables.set('ticket_id', body.data[0].id);",
+                                    "    if (body.data[0].assignee_id) {",
+                                    "        pm.collectionVariables.set('assignee_id', body.data[0].assignee_id);",
+                                    "    }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Listar por responsável (minha fila)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets?assignee_id={{assignee_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets?assignee_id={{assignee_id}}"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/tickets?assignee_id=` — rota protegida\n\nFiltra pelos chamados que uma pessoa **está tratando** (\"minha fila\"). Use `{{gestor_id}}` para ver a fila do gestor conhecido.\n\nEste é o filtro que responde \"o que está comigo\" — distinto do `?user_id=`, que responde \"o que eu abri\"."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('todos os chamadosTem o responsavel filtrado', function () {",
+                                    "    const esperado = Number(pm.collectionVariables.get('assignee_id'));",
+                                    "    pm.expect(esperado).to.be.a('number').and.not.NaN;",
+                                    "    body.data.forEach(function (t) {",
+                                    "        pm.expect(t.assignee_id).to.eql(esperado);",
+                                    "    });",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Listar por autor (chamados que eu abri)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets?user_id={{user_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets?user_id={{user_id}}"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/tickets?user_id=` — rota protegida\n\nFiltra pelos chamados que a pessoa autenticada **abriu**."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('todos os chamados tem o autor filtrado', function () {",
+                                    "    const esperado = Number(pm.collectionVariables.get('user_id'));",
+                                    "    pm.expect(esperado).to.be.a('number').and.not.NaN;",
+                                    "    body.data.forEach(function (t) {",
+                                    "        pm.expect(t.user_id).to.eql(esperado);",
+                                    "    });",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Criar chamado (atribuição automática)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Ar-condicionado da sala 401 nao gela\",\n  \"description\": \"O ar-condicionado esta ligando mas o ambiente permanece quente desde ontem.\",\n  \"priority\": \"high\",\n  \"status\": \"open\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets` — rota protegida\n\nAbre um chamado com **atribuição automática**: o backend escolhe o gestor com menos chamados **em aberto** (`open` + `in_progress`) **atribuídos a ele** e preenche `assignee_id`.\n\n### Os dois usuários do chamado\n| Campo | Papel | Origem |\n|---|---|---|\n| `user_id` | **AUTOR** | **sempre o token**, nunca o payload |\n| `assignee_id` | **RESPONSÁVEL** | sorteado, ou enviado, ou `null` (fila) |\n\nO autor é o token pelo mesmo motivo que `role` não é preenchível: se viesse do body, qualquer autenticado abriria chamado em nome de outro.\n\n### Carga de trabalho\nA contagem é por chamado **atribuído**, nunca por chamado **aberto** — abrir muitos chamados não deixa ninguém mais ocupado. O desempate entre gestores igualmente ociosos vai para o **menor `id`**.\n\n### Validação do payload\n| Campo | Regras |\n|---|---|\n| `title` | obrigatório, string, max 255 |\n| `description` | obrigatório, string |\n| `priority` | obrigatório, `low` \\| `medium` \\| `high` |\n| `status` | `open` (padrão) \\| `in_progress` \\| `resolved` \\| `closed` |\n| `assignee_id` | opcional, inteiro, **deve ser gestor** |\n| `auto_assign` | opcional, boolean (padrão `true`) |\n\n| `auto_assign` | `assignee_id` | Resultado |\n|---|---|---|\n| ausente (padrão) | ausente | atribuição automática |\n| `true` | ausente | atribuição automática |\n| `false` | ausente | `assignee_id: null` — **fila** |\n| qualquer | enviado | usa o valor informado |\n\n> `assignee_id` explícito sempre tem prioridade sobre a flag.\n\n### Respostas\n- `201 Created`\n- `401 Unauthenticated`\n- `422 Unprocessable Entity`"
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('201 Created', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('chamado criado', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(body.data).to.have.property('id');",
+                                    "    pm.expect(body.data).to.have.property('title');",
+                                    "});",
+                                    "",
+                                    "pm.test('autor vem do token', function () {",
+                                    "    pm.expect(body.data.user_id).to.eql(Number(pm.collectionVariables.get('user_id')));",
+                                    "    pm.expect(body.data.user.id).to.eql(body.data.user_id);",
+                                    "});",
+                                    "",
+                                    "pm.test('atribuicao automatica define um responsavel gestor', function () {",
+                                    "    pm.expect(body.data.assignee_id, 'assignee_id deveria ser preenchido pela atribuicao automatica')",
+                                    "        .to.not.eql(null).and.to.not.eql(undefined);",
+                                    "    pm.expect(body.data.assignee.role, 'o responsavel sorteado e sempre gestor')",
+                                    "        .to.be.oneOf(['gestor', 'admin']);",
+                                    "});",
+                                    "",
+                                    "if (body.data) {",
+                                    "    pm.collectionVariables.set('ticket_id', body.data.id);",
+                                    "    if (body.data.assignee_id) {",
+                                    "        pm.collectionVariables.set('assignee_id', body.data.assignee_id);",
+                                    "    }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": [
+                        {
+                            "name": "201 - Criado com responsavel",
+                            "status": "Created",
+                            "code": 201,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"message\": \"Chamado criado com sucesso.\",\n  \"data\": {\n    \"id\": 1001,\n    \"user_id\": 1,\n    \"assignee_id\": 42,\n    \"title\": \"Ar-condicionado da sala 401 nao gela\",\n    \"description\": \"O ar-condicionado esta ligando mas o ambiente permanece quente desde ontem.\",\n    \"priority\": \"high\",\n    \"status\": \"open\",\n    \"created_at\": \"2026-09-27T12:00:00.000000Z\",\n    \"updated_at\": \"2026-09-27T12:00:00.000000Z\",\n    \"user\": {\n      \"id\": 1,\n      \"name\": \"Test User\",\n      \"email\": \"test@example.com\",\n      \"email_verified_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"role\": \"user\",\n      \"created_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"updated_at\": \"2026-09-27T12:00:00.000000Z\"\n    },\n    \"assignee\": {\n      \"id\": 42,\n      \"name\": \"Joao Pereira\",\n      \"email\": \"joao@example.com\",\n      \"email_verified_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"role\": \"gestor\",\n      \"created_at\": \"2026-09-27T12:00:00.000000Z\",\n      \"updated_at\": \"2026-09-27T12:00:00.000000Z\"\n    }\n  }\n}",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"title\": \"Ar-condicionado da sala 401 nao gela\",\n  \"description\": \"O ar-condicionado esta ligando mas o ambiente permanece quente desde ontem.\",\n  \"priority\": \"high\",\n  \"status\": \"open\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/tickets",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "tickets"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Criar chamado (responsável manual)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Solicitacao de novo cracha de acesso\",\n  \"description\": \"Cracha perdido no Predio A, necessito de um novo para circular nas areas restritas.\",\n  \"priority\": \"low\",\n  \"assignee_id\": {{gestor_id}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets` — rota protegida\n\nMesmo endpoint, mas com **`assignee_id` explícito**: a atribuição automática é pulada e o responsável é exatamente o informado.\n\nO `{{gestor_id}}` vem do login do gestor, então o valor é sempre válido e não depende da ordem em que a coleção é rodada.\n\n### Restrição\nSó **gestor** (ou admin) pode ser responsável. Enviar um `user` comum ou o próprio autor quando ele não é gestor devolve `422` — é o que impede um pedido de virar tarefa de quem o fez. Enviar `null` deixa o chamado na fila."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('201 Created', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('usa o responsavel informado no payload', function () {",
+                                    "    pm.expect(body.data.assignee_id).to.eql(Number(pm.collectionVariables.get('gestor_id')));",
+                                    "});",
+                                    "",
+                                    "pm.test('o autor continua sendo o token, nao o payload', function () {",
+                                    "    pm.expect(body.data.user_id).to.eql(Number(pm.collectionVariables.get('user_id')));",
+                                    "});",
+                                    "",
+                                    "if (body.data) {",
+                                    "    pm.collectionVariables.set('ticket_id', body.data.id);",
+                                    "    pm.collectionVariables.set('assignee_id', body.data.assignee_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Listar por autor E responsável (filtros combinados)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets?user_id={{user_id}}&assignee_id={{gestor_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets?user_id={{user_id}}&assignee_id={{gestor_id}}"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/tickets?user_id=&assignee_id=` — rota protegida\n\nOs dois filtros são eixos **independentes** e a API os combina com **AND**: traz só os chamados que a pessoa indicada **abriu** **e** que a pessoa indicada **está tratando**.\n\nEste request depende do chamado criado na requisição anterior (responsável manual), então o resultado não é vazio e dá para verificar que os dois filtros foram aplicados de verdade.\n\nO teste falha se a API ignorar qualquer um dos dois: basta um chamado com o autor certo e o responsável errado, ou o contrário, aparecer no resultado."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "const autor = Number(pm.collectionVariables.get('user_id'));",
+                                    "const resp = Number(pm.collectionVariables.get('gestor_id'));",
+                                    "const criado = Number(pm.collectionVariables.get('ticket_id'));",
+                                    "",
+                                    "pm.test('os ids dos filtros foram resolvidos', function () {",
+                                    "    pm.expect(autor).to.be.a('number').and.not.NaN;",
+                                    "    pm.expect(resp).to.be.a('number').and.not.NaN;",
+                                    "});",
+                                    "",
+                                    "pm.test('todo chamado satisfaz os DOIS filtros', function () {",
+                                    "    body.data.forEach(function (t) {",
+                                    "        pm.expect(t.user_id).to.eql(autor);",
+                                    "        pm.expect(t.assignee_id).to.eql(resp);",
+                                    "    });",
+                                    "});",
+                                    "",
+                                    "pm.test('o chamado criado na requisicao anterior aparece no resultado', function () {",
+                                    "    let achou = false;",
+                                    "    body.data.forEach(function (t) {",
+                                    "        if (t.id === criado) {",
+                                    "            achou = true;",
+                                    "        }",
+                                    "    });",
+                                    "    pm.expect(achou).to.eql(true);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Criar chamado (sem responsável - fila)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Chamado na fila de espera\",\n  \"description\": \"Aberto sem responsavel: fica na fila ate alguem assumir.\",\n  \"priority\": \"medium\",\n  \"auto_assign\": false\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets` — rota protegida\n\nAbre o chamado **na fila de espera**: `auto_assign: false` sem `assignee_id` deixa `assignee_id` como `null`.\n\nRepare que o **autor continua preenchido**. Essa é a distinção que o modelo de dois usuários torna explícita: um chamado sem responsável não é um chamado sem dono — ele só está esperando para ser distribuído. A pasta **02** mostra como a fila é consumida.\n\n> A exclusão do responsável no banco também zera o `assignee_id` (FK `nullOnDelete`) e o chamado volta para a fila, mas é caminho raro: a FK do autor é `restrictOnDelete`, então quem já abriu algum chamado não pode ser excluído. As rotas que esvaziam a fila de propósito são `PUT` com `assignee_id: null` e `POST /tickets/unassign-open`."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('201 Created', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "",
+                                    "pm.test('chamado criado SEM responsavel', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(body.data).to.have.property('assignee_id');",
+                                    "    pm.expect(body.data.assignee_id).to.eql(null);",
+                                    "    pm.expect(body.data.assignee).to.eql(null);",
+                                    "});",
+                                    "",
+                                    "pm.test('o autor permanece preenchido mesmo na fila', function () {",
+                                    "    pm.expect(body.data.user_id).to.eql(Number(pm.collectionVariables.get('user_id')));",
+                                    "    pm.expect(body.data.user.id).to.eql(body.data.user_id);",
+                                    "});",
+                                    "",
+                                    "if (body.data) {",
+                                    "    pm.collectionVariables.set('ticket_id', body.data.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Criar chamado (autor forjado é ignorado)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Tentativa de abrir chamado em nome de outro\",\n  \"description\": \"O user_id enviado no payload deve ser descartado.\",\n  \"priority\": \"low\",\n  \"user_id\": 999999\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets` — rota protegida\n\nDocumenta uma regra: **`user_id` no payload é ignorado.**\n\nO autor é sempre o token. O body nem sequer é validado no campo `user_id` — não existe regra para ele, então o valor some sem erro, inclusive quando aponta para um usuário inexistente. Sem isso, qualquer autenticado abriria chamado em nome de outro.\n\nA chamada devolve `201`, e não `422`: o campo não é inválido, é simplesmente irrelevante."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('201 Created, e nao 422', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('autor forjado foi descartado', function () {",
+                                    "    pm.expect(body.data.user_id).to.not.eql(999999);",
+                                    "    pm.expect(body.data.user_id).to.eql(Number(pm.collectionVariables.get('user_id')));",
+                                    "});",
+                                    "",
+                                    "pm.test('o responsavel nao foi afetado pela tentativa', function () {",
+                                    "    pm.expect(body.data).to.have.property('assignee_id');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Ver chamado",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets/{{ticket_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "{{ticket_id}}"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/tickets/{ticket}` — rota protegida\n\nDetalha um chamado, com `user` (autor) e `assignee` (responsável) carregados. Chamados excluídos (`soft delete`) devolvem `404`.\n\n### Respostas\n- `200 OK`\n- `401 Unauthenticated`\n- `404 Not Found`"
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('retorna o chamado solicitado', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(String(body.data.id)).to.eql(String(pm.collectionVariables.get('ticket_id')));",
+                                    "});",
+                                    "",
+                                    "pm.test('expoe os dois usuarios', function () {",
+                                    "    pm.expect(body.data).to.have.property('user_id');",
+                                    "    pm.expect(body.data).to.have.property('assignee_id');",
+                                    "    pm.expect(body.data.user).to.be.an('object');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Atualizar chamado",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{gestor_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"status\": \"in_progress\",\n  \"priority\": \"high\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets/{{ticket_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "{{ticket_id}}"
+                            ]
+                        },
+                        "description": "## `PUT /api/v1/tickets/{ticket}` — rota protegida (gestor)\n\nAtualiza um chamado. **Exige `{{gestor_token}}`**: um `user` comum recebe `403`.\n\n### Quem pode\nGestor ou admin. A permissão é por **papel**, não por vínculo: qualquer gestor edita qualquer chamado, inclusive um que nem abriu. Não há verificação de que o ator é o `assignee_id`.\n\n### O que é editável\n| Campo | Editável | Observação |\n|---|---|---|\n| `title` | sim | max 255 |\n| `description` | sim | |\n| `priority` | sim | `low` \\| `medium` \\| `high` |\n| `status` | sim | `open` \\| `in_progress` \\| `resolved` \\| `closed` |\n| `assignee_id` | sim | **só gestor**; `null` esvazia e manda para a fila |\n| `user_id` | **não** | **autor é imutável** — quem abriu é fato histórico |\n\nEnviar `user_id` no update é **descartado silenciosamente**, inclusive se o valor for válido e diferente do atual. Não gera erro.\n\n### Respostas\n- `200 OK`\n- `401 Unauthenticated`\n- `403 Forbidden` — papel sem permissão\n- `404 Not Found`"
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('campos enviados foram aplicados', function () {",
+                                    "    pm.expect(body.data.status).to.eql('in_progress');",
+                                    "    pm.expect(body.data.priority).to.eql('high');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Atualizar chamado (autor é imutável)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{gestor_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Titulo corrigido pelo gestor\",\n  \"user_id\": 999999\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets/{{ticket_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "{{ticket_id}}"
+                            ]
+                        },
+                        "description": "## `PUT /api/v1/tickets/{ticket}` — rota protegida (gestor)\n\nConfirma que a **autoria é imutável**, mesmo para quem tem permissão de edição.\n\nO `user_id: 999999` é descartado em silêncio. O título é aplicado normalmente, o status da requisição é `200` e a autoria do chamado continua a mesma.\n\n> A garantia é feita em duas camadas: o campo não tem regra de validação, e o service o remove dos dados antes de gravar. Enviar um valor válido e diferente do atual também não muda nada."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('o titulo foi aplicado', function () {",
+                                    "    pm.expect(body.data.title).to.eql('Titulo corrigido pelo gestor');",
+                                    "});",
+                                    "",
+                                    "pm.test('a autoria nao mudou', function () {",
+                                    "    pm.expect(body.data.user_id).to.not.eql(999999);",
+                                    "    pm.expect(body.data.user_id).to.eql(Number(pm.collectionVariables.get('user_id')));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Atualizar status (resolver)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{gestor_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"status\": \"resolved\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets/{{ticket_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "{{ticket_id}}"
+                            ]
+                        },
+                        "description": "## `PUT /api/v1/tickets/{ticket}` — rota protegida (gestor)\n\nMove o chamado para `resolved`.\n\n`resolved` e `closed` **tiram o chamado da carga de trabalho**: ele deixa de contar no cálculo da atribuição automática. A carga é medida por `open` + `in_progress` apenas.\n\n> Concluir um chamado **não** devolve a carga a outro gestor. Quem redistribui é `POST /tickets/balance` (admin)."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('status resolvido', function () {",
+                                    "    pm.expect(body.data.status).to.eql('resolved');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Excluir chamado",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{gestor_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets/{{ticket_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "{{ticket_id}}"
+                            ]
+                        },
+                        "description": "## `DELETE /api/v1/tickets/{ticket}` — rota protegida (gestor)\n\nExclui um chamado. **Exige `{{gestor_token}}`**: um `user` comum recebe `403`.\n\nA resposta é `204 No Content`, **sem corpo**. A exclusão é **lógica** (`soft delete`): a linha continua no banco com `deleted_at` preenchido e some das listagens. A carga de trabalho do responsável também deixa de contar o chamado.\n\n> O mesmo chamado continua acessível por `withTrashed()` / `trashed()` no Eloquent. Não há rota de restauração."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('204 No Content', function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});",
+                                    "pm.test('corpo da resposta vazio', function () {",
+                                    "    pm.expect(pm.response.text()).to.eql('');",
+                                    "});",
+                                    "",
+                                    "pm.collectionVariables.set('ticket_id', '');"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "02 - Redistribuição (admin)",
+            "description": "Rotas exclusivas de **administrador** (`{{admin_token}}`). Nenhum outro papel acessa.",
+            "item": [
+                {
+                    "name": "Redistribuir chamados da fila (balance)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets/balance",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "balance"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets/balance` — rota protegida (**admin**)\n\nPega todos os chamados **sem responsável** que ainda estão em aberto e os distribui, um a um, entre os gestores mais ociosos — considerando a carga **já** acumulada durante a própria operação.\n\n**Exige `{{admin_token}}`.** Um gestor ou um `user` recebe `403`, com a mensagem da policy. A checagem está na `TicketPolicy`, não em middleware.\n\n### Como escolhe\n1. Pool = todos os gestores e admins, travados com `lockForUpdate`.\n2. Ordena por número de chamados **`open` + `in_progress` atribuídos** a cada um, do menor para o maior.\n3. Empate vai para o **menor `id`**, o que torna o resultado determinístico.\n4. Os chamados são processados do **mais antigo** para o mais novo, e a carga de cada gestor é incrementada a cada distribuição.\n\nComo a atribuição automática do `POST /tickets` usa exatamente a mesma contagem, o balanceamento converte a fila para a mesma distribuição que o fluxo normal produziria.\n\n### O que retorna\n| Campo | Significado |\n|---|---|\n| `distributed` | quantos chamados receberam responsável |\n| `kept_open_untouched` | chamados sem responsável que **não** entraram (já `resolved`/`closed`) |\n| `gestores` | tamanho do pool elegível |\n| `min_open` / `max_open` / `difference` | menor, maior e diferença de carga no pool |\n| `load_by_gestor` | carga final por `id` de gestor |\n\n> Com o pool vazio (nenhum gestor cadastrado), retorna `distributed: 0` sem erro.\n\n### Respostas\n- `200 OK`\n- `401 Unauthenticated`\n- `403 Forbidden` — papel diferente de admin"
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('relatorio de redistribuicao', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(body.data.distributed).to.be.a('number');",
+                                    "    pm.expect(body.data.gestores).to.be.a('number');",
+                                    "    pm.expect(body.data.load_by_gestor).to.be.an('object');",
+                                    "});",
+                                    "",
+                                    "pm.test('a fila foi esvaziada', function () {",
+                                    "    pm.expect(body.data.distributed).to.be.a('number').and.not.eql(undefined);",
+                                    "    console.log('Redistribuidos: ' + body.data.distributed);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": [
+                        {
+                            "name": "200 - Redistribuicao concluida",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"message\": \"Redistribuicao concluida.\",\n  \"data\": {\n    \"distributed\": 12,\n    \"kept_open_untouched\": 0,\n    \"gestores\": 50,\n    \"min_open\": 7,\n    \"max_open\": 9,\n    \"difference\": 2,\n    \"load_by_gestor\": {\n      \"101\": 8,\n      \"102\": 9\n    }\n  }\n}",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/tickets/balance",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "tickets",
+                                        "balance"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Remover responsáveis dos abertos (unassign-open)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets/unassign-open",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "unassign-open"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets/unassign-open` — rota protegida (**admin**)\n\n**Esvazia o responsável de todos os chamados em aberto** (`open` + `in_progress`), colocando-os de volta na fila em um único `UPDATE`.\n\n**Exige `{{admin_token}}`.** Serve para zerar a fila e redistribuir do zero — normalmente seguido de um `POST /tickets/balance`.\n\nOs autores dos chamados **não** são tocados. Como o autor é obrigatório, nenhum chamado fica órfão: a fila é sempre um conjunto de chamados com dono.\n\nChamados já `resolved` ou `closed` são ignorados — não têm mais carga de trabalho a redistribuir.\n\n> A ação é irreversível quanto ao responsável: o valor anterior não é guardado em histórico.\n\n### Respostas\n- `200 OK` — com a quantidade de chamados esvaziados\n- `401 Unauthenticated`\n- `403 Forbidden` — papel diferente de admin"
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('informa quantos chamados foram esvaziados', function () {",
+                                    "    pm.expect(body.data).to.be.a('number');",
+                                    "    console.log('Chamados esvaziados: ' + body.data);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Balance sem perfil admin (403)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets/balance",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "balance"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets/balance` — acesso negado\n\nA mesma rota do primeiro item desta pasta, chamada com o token de **usuário comum**.\n\nO `403` vem da `TicketPolicy`, e a mensagem no corpo é a que a policy define — a rota não tem nenhum middleware de papel. A distinção importa: a autorização está no único lugar que responde \"esta pessoa pode executar esta ação\", e não espalhada em aliases de rota.\n\n### Hierarquia de papéis\n`user` < `gestor` < `admin`. Um admin também pode ser responsável e editar/excluir chamados; um gestor não acessa estas duas rotas."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('403 Forbidden', function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('mensagem vem da policy', function () {",
+                                    "    pm.expect(body.message).to.be.a('string');",
+                                    "    pm.expect(body.message).to.not.be.empty;",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "03 - Validação e acesso negado",
+            "description": "Erros esperados da API: token, validação de payload, falta de permissão e recurso inexistente.\\n\\nA pasta é autossuficiente: as duas requisições de preparação criam um chamado e confirmam que ele existe, para que os testes de `403` tenham um `{{ticket_id}}` válido. Isso é necessário porque a pasta `01` termina excluindo o chamado dela e limpando a variável.",
+            "item": [
+                {
+                    "name": "Sem token (401)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/tickets` sem token\n\nSem o header `Authorization`, a resposta é `401 Unauthenticated`.\n\nO guardião é o middleware `auth:sanctum`, aplicado ao grupo de rotas de chamados. Ele responde **antes** de qualquer regra de negócio: um usuário comum sem token não chega a ver nem a lista."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('401 Unauthorized', function () {",
+                                    "    pm.response.to.have.status(401);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('mensagem Unauthenticated', function () {",
+                                    "    pm.expect(body.message).to.eql('Unauthenticated.');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Token inválido (401)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer token-invalido-para-teste"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "me"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/me` com token inválido\n\nUm token que não existe no banco de `personal_access_tokens` é recusado com `401`, o mesmo que um token ausente.\n\nO token do Sanctum é opaco e não tem expiração por padrão: enquanto a linha existir em `personal_access_tokens`, ele continua válido. Não há logout no backend — para invalidar, remova a linha."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('401 Unauthorized', function () {",
+                                    "    pm.response.to.have.status(401);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Login inválido (422)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"senha-errada\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "login"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/login` com senha errada\n\nCredenciais incorretas devolvem `422` com o erro em `errors.email` — a resposta é deliberadamente igual à de e-mail inexistente, para não revelar quais e-mails existem na base."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('422 Unprocessable Entity', function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('erro em errors.email', function () {",
+                                    "    pm.expect(body.errors).to.be.an('object');",
+                                    "    pm.expect(body.errors.email).to.be.an('array').and.not.empty;",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Criar chamado inválido (422)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"\",\n  \"description\": \"\",\n  \"priority\": \"urgente\",\n  \"assignee_id\": 999999\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets` com payload inválido\n\nReúne as falhas de validação em uma única resposta `422`, com todos os campos errados de uma vez.\n\nO `assignee_id: 999999` também aponta para um usuário inexistente. Repare que **o erro de `assignee_id` não aparece na lista**: a checagem é twofold — existe um usuário com esse id, **e** ele é gestor. O id `999999` falha no primeiro teste, então a resposta cobre `title`, `description`, `priority` e `assignee_id`.\n\n> Para ver o caso \"existe mas não é gestor\", use a requisição seguinte."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('422 Unprocessable Entity', function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('erros de title, description, priority e assignee_id', function () {",
+                                    "    pm.expect(body.errors).to.have.property('title');",
+                                    "    pm.expect(body.errors).to.have.property('description');",
+                                    "    pm.expect(body.errors).to.have.property('priority');",
+                                    "    pm.expect(body.errors).to.have.property('assignee_id');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Atribuir chamado a não gestor (422)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Chamado para usuario comum\",\n  \"description\": \"O assignee_id aponta para um user, que nao pode executar chamado.\",\n  \"priority\": \"low\",\n  \"assignee_id\": {{user_id}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets` — responsável não é gestor\n\nO `{{user_id}}` é o id do **usuário comum autenticado**, e ele é enviado como `assignee_id`.\n\nO usuário existe, mas não é gestor, então a `422` acontece. Este é o teste mais direto da invariante do modelo: **o autor pode ser qualquer papel, o responsável só gestor**.\n\nA mesma restrição vale no `PUT` — é por isso que um pedido não pode ser repassado para quem o fez quando quem o fez não é gestor."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('422 Unprocessable Entity', function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('erro em assignee_id', function () {",
+                                    "    pm.expect(body.errors).to.be.an('object');",
+                                    "    pm.expect(body.errors.assignee_id).to.be.an('array').and.not.empty;",
+                                    "});",
+                                    "",
+                                    "pm.test('nenhum chamado foi criado', function () {",
+                                    "    console.log('Rejeitado antes de gravar: nenhum chamado persistido.');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Criar chamado (preparar teste de escrita)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Chamado para testar acesso negado\",\n  \"description\": \"Criado so para as requisicoes de 403 logo abaixo.\",\n  \"priority\": \"low\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets"
+                            ]
+                        },
+                        "description": "## `POST /api/v1/tickets` — preparação\n\nCria um chamado e grava o id em `{{ticket_id}}`, para as duas requisições de acesso negado que vem a seguir.\n\n**Por que este passo existe:** a pasta `01` termina excluindo um chamado e limpando `{{ticket_id}}`. Sem recriar o chamado aqui, os testes de `403` abaixo sairiam com a variável vazia, a URL viraria `PUT /api/v1/tickets` e a resposta seria `405 Method Not Allowed` — um erro de método em vez do `403` de permissão que se quer verificar.\n\nÉ a razão de a pasta `03` não depender de estado deixado por outra pasta."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('201 Created', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "if (body.data) {",
+                                    "    pm.collectionVariables.set('ticket_id', body.data.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Ver chamado criado (preparação do teste de escrita)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets/{{ticket_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "{{ticket_id}}"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/tickets/{ticket}` — criado pela requisição anterior\n\nConfirma que o chamado existe e está acessível **antes** dos testes de `403`. Sem esta checagem, uma falha silenciosa na requisição anterior (por exemplo, um `{{ticket_id}}` não gravado) apareceria como `405` nas duas requisições seguintes — um sintoma que não aponta para a causa."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('tem autor e pode ter responsavel', function () {",
+                                    "    pm.expect(body.data).to.be.an('object');",
+                                    "    pm.expect(body.data.user_id).to.not.eql(null);",
+                                    "    pm.expect(body.data).to.have.property('assignee_id');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Editar chamado sem perfil gestor (403)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"status\": \"in_progress\",\n  \"priority\": \"high\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/tickets/{{ticket_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "{{ticket_id}}"
+                            ]
+                        },
+                        "description": "## `PUT /api/v1/tickets/{ticket}` — usuário comum\n\nMesmo update da pasta **01**, agora com o token de **usuário comum** e sobre o chamado criado na requisição anterior desta pasta.\n\nA `TicketPolicy` só olha o **papel** (`gestor` ou `admin`), então um `user` é recusado com `403` e a mensagem definida na policy. O `403` **não tem efeito colateral**: o chamado continua com o título e o status originais.\n\nObserve que o usuário comum pode ter **aberto** esse chamado — ser o autor não dá nenhum direito a editá-lo."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('403 Forbidden', function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('mensagem vem da policy', function () {",
+                                    "    pm.expect(body.message).to.be.a('string').and.not.empty;",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Excluir chamado sem perfil gestor (403)",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets/{{ticket_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "{{ticket_id}}"
+                            ]
+                        },
+                        "description": "## `DELETE /api/v1/tickets/{ticket}` — usuário comum\n\nA exclusão é restrita a gestor e admin, então o usuário comum recebe `403`.\n\nVale o mesmo ponto da edição: o `403` acontece **antes** de qualquer escrita, então o chamado continua existindo. Se o `DELETE` fosse aplicado, o soft delete teria removido o registro da fila."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('403 Forbidden', function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "",
+                                    "const body = pm.response.json();",
+                                    "pm.test('mensagem vem da policy', function () {",
+                                    "    pm.expect(body.message).to.be.a('string').and.not.empty;",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Chamado inexistente (404)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/tickets/999999",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "tickets",
+                                "999999"
+                            ]
+                        },
+                        "description": "## `GET /api/v1/tickets/{ticket}` inexistente\n\nUm id que não existe (ou que foi excluído por soft delete) devolve `404`.\n\nOs dois casos são indistinguíveis na resposta, de propósito: confirmar que um id existe mas está excluído já entregaria informação sobre chamados removidos."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('404 Not Found', function () {",
+                                    "    pm.response.to.have.status(404);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                }
+            ]
+        }
+    ]
+}

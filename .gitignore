@@ -1,1 +1,6 @@
-docs/
+./docs/
+.nuxt/
+.output/
+.data/
+dist/
+frontend/.env

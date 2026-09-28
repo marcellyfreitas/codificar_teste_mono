@@ -48,9 +48,6 @@ class TicketService
             });
         }
 
-        // Inclusivo nas duas pontas: `created_to=2026-09-28` inclui o dia
-        // inteiro. `whereDate` compara a data, nao o instante, que e o que o
-        // usuario espera de um filtro por dia.
         if ($createdFrom !== null) {
             $query->whereDate('created_at', '>=', $createdFrom);
         }
@@ -262,15 +259,6 @@ class TicketService
         return $value === '' ? null : $value;
     }
 
-    /**
-     * Data que nao e `YYYY-MM-DD` de verdade e ignorada, nao recusada — a mesma
-     * convencao que o `ctype_digit` ja aplica a `user_id` e `assignee_id`. Um
-     * filtro com garbage no meio de um quadro nao pode derrubar a requisicao.
-     *
-     * O round-trip contra `format()` e o que separa `2026-09-28` de
-     * `2026-13-45`: o `createFromFormat` aceita os dois e rola o segundo para
-     * um dia valido de outro mes.
-     */
     private function filterDate(array $filters, string $key): ?string
     {
         $value = $this->filterValue($filters, $key);

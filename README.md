@@ -132,6 +132,27 @@ Cinco migrations, todas de criação.
 
 ## Como executar
 
+### Setup completo (ambos os lados)
+
+```bash
+# 1. Backend
+cd backend
+composer install
+cp .env.example .env && php artisan key:generate
+touch database/database.sqlite
+php artisan migrate --seed
+# deixa rodando: http://localhost:8000/api/v1
+
+# 2. Frontend (em outro terminal)
+cd frontend
+npm install
+cp .env.example .env
+npm run dev
+# http://localhost:3000
+```
+
+### Só o backend
+
 ```bash
 cd backend
 composer install
@@ -147,6 +168,56 @@ papel fixo para conveniently exercitar cada nível de permissão: `test@example.
 `gestor@example.com` e `admin@example.com`.
 
 A API responde sob o prefixo `/api/v1`, e o health check em `/up`.
+
+## Frontend
+
+Nuxt 4 · Tailwind CSS v4 · shadcn-vue · Vue Draggable Plus · @vueuse/core
+
+O frontend consome a API pelo proxy do Nuxt — todas as chamadas saem de `/api/v1/**`
+e são repassadas para o backend configurado em `NUXT_API_ORIGIN`. **Não há CORS
+configurado no backend**; sem o proxy o browser não consegue chamar a API diretamente.
+
+### Rotas
+
+| Rota | Guard | Descrição |
+|---|---|---|
+| `/login` | guest | Formulário de login |
+| `/register` | guest | Cadastro de conta |
+| `/chamados` | auth | Lista e quadro Kanban de chamados |
+| `/fila` | admin | Operações de distribuição de fila |
+
+### Papéis e permissões
+
+| Ação | user | gestor | admin |
+|---|---|---|---|
+| Abrir chamado | ✓ | ✓ | ✓ |
+| Editar chamado | — | ✓ | ✓ |
+| Excluir chamado | — | ✓ | ✓ |
+| Ser responsável | — | ✓ | — |
+| Operar a fila | — | — | ✓ |
+
+> **Atenção:** `admin` pode editar e excluir, mas **não pode ser responsável** por um chamado.
+> A regra `ExistsAsGestor` do backend aceita apenas `role = gestor` como `assignee_id`.
+> O `README.md` antigo dizia "gestor ou admin" aqui e estava errado — confiar no código.
+
+### Métricas de distribuição
+
+`POST /api/v1/tickets/balance` devolve:
+
+- `distributed` — chamados distribuídos nesta execução
+- `difference` — `max_open - min_open` por gestor. `0` = distribuição perfeita.
+- `min_open` / `max_open` — faixa de carga entre gestores
+- `load_by_gestor` — `Record<id, number>` com 50 entradas (uma por gestor)
+
+O balanceamento é idempotente: rodar duas vezes sem mudança entre as execuções não altera nada.
+
+### Nota sobre o bundle
+
+`npx shadcn-vue add --all` instala ~70 componentes (peers incluem `@tanstack/vue-table`,
+`chart.js`, `embla-carousel-vue`, `vee-validate`, `zod`, `date-fns`). O app usa
+uma fração disso; o Nuxt/Vite descarta o restante no build final via tree-shaking.
+
+## Rotas da API (completo)
 
 ## Testes
 
@@ -168,3 +239,31 @@ está longe da causa.
 A cobertura é de regra de negócio e fronteira de permissão: a métrica de carga e seu
 desempate, a idempotência do balanceamento, a diferença entre autor e responsável, a
 imutabilidade da autoria, a matriz de permissão por papel, e as respostas de erro.
+
+
+```
+POST   /api/v1/register                → 201  {message, data:{user, access_token, token_type}}
+POST   /api/v1/login                   → 200  idem
+GET    /api/v1/me                      → 200  {data: User}
+GET    /api/v1/users                   → 200  paginador (filtros: role, search, per_page)
+GET    /api/v1/tickets                 → 200  paginador (filtros: status, priority, user_id, assignee_id, search, created_from, created_to)
+POST   /api/v1/tickets                 → 201  {message, data: Ticket}
+GET    /api/v1/tickets/{id}            → 200  {data: Ticket}
+PUT    /api/v1/tickets/{id}            → 200  {message, data: Ticket}   gestor|admin
+DELETE /api/v1/tickets/{id}            → 204  sem corpo                 gestor|admin
+POST   /api/v1/tickets/balance         → 200  {message, data:{...}}     admin
+POST   /api/v1/tickets/unassign-open   → 200  {message, data:{affected}} admin
+```
+
+Erros: `{message, errors?: {campo: [mensagem]}}`.
+- `401` — `Unauthenticated.`
+- `403` — mensagem da policy
+- `422` — erros por campo (mensagens em português)
+
+## Testes
+
+```bash
+cd backend
+php artisan test        # 145 testes, ~3s
+./vendor/bin/pint --test
+```

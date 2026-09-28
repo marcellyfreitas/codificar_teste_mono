@@ -13,12 +13,6 @@ class UserController extends Controller
         protected UserService $userService
     ) {}
 
-    /**
-     * Nao ha policy aqui de proposito. Todo papel autenticado ja ve nome e
-     * e-mail de quem aparece em qualquer chamado, via o `user` embutido no
-     * payload de `/tickets`. Restringir o diretorio nao protegeria nada que o
-     * payload de chamado ja nao exponha.
-     */
     public function index(ListUsersRequest $request): JsonResponse
     {
         $filters = $request->only(['role', 'search']);

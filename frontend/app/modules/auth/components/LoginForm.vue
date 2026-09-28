@@ -1,25 +1,10 @@
 <script setup lang="ts">
 import { ApiError } from '~/modules/core/ports/http'
 import { isValid, validateLogin } from '~/modules/auth/utils/credentials'
-// `vue-sonner` exporta a função `toast`, não um composable `useToast`. O
-// `useToast` que parece existir é o do próprio Nuxt, que resolve para outra
-// coisa e joga `ReferenceError` em tempo de execução — bem num `try/catch` que
-// o typecheck não pega.
 import { toast } from 'vue-sonner'
 
 import type { LoginDraft, LoginErrors } from '~/modules/auth/utils/credentials'
 
-/**
- * Formulário de login.
- *
- * O ponto que exige atenção: senha errada responde **422**, não 401 — o
- * backend lança `ValidationException`, não falha de autenticação. Código que
- * só trata 401 cairia no erro genérico e a mensagem "As credenciais fornecidas
- * estão incorretas." nunca apareceria no campo.
- *
- * Por isso os 422 são tratados como erro de campo, e o `message` do envelope
- * só vira toast quando não há campo correspondente.
- */
 const draft = reactive<LoginDraft>({ email: '', password: '' })
 const errors = reactive<LoginErrors>({})
 const submitting = ref(false)
@@ -61,7 +46,7 @@ async function enviar(): Promise<void> {
   try {
     const session = await login({ email: draft.email, password: draft.password })
 
-    toast.success(`Bem-vindo, ${session.user.name}.`)
+    toast.success(`Bem-vindo, ${session.name}.`)
 
     // O `redirect` vem do guard. Sanear o valor antes de navegar: sem isso, um
     // `?redirect=https://exemplo.invalido` digitado à mão viraria um

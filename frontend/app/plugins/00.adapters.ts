@@ -1,32 +1,21 @@
 import { FetchHttpAdapter } from '~/modules/core/adapters/http'
 import { HttpAuthRepository } from '~/modules/auth/adapters/auth-repository.http'
-import { useAuthToken } from '~/modules/core/composable/useAuthToken'
+import { HttpUserDirectory } from '~/modules/users/adapters/user-directory.http'
+import { HttpTicketRepository } from '~/modules/tickets/adapters/ticket-repository.http'
 
-/**
- * Composition root: o único lugar que instancia adapters concretos.
- *
- * O `00` no nome não é decoração — o Nuxt ordena plugins por nome de arquivo, e
- * a reidratação de sessão (`01.session`) precisa de `$authRepository` pronto.
- * Com `enforce: 'pre'` no plugin de sessão, ele rodaria antes de qualquer
- * outro e chamaria `me()` num adapter inexistente.
- *
- * O `FetchHttpAdapter` recebe `getToken` como callback em vez do valor, e não
- * do token. Se recebesse o token, teria de ser recriado a cada login e logout,
- * e o adapter guardado no `nuxtApp` passaria a mandar token velho depois do
- * logout — a race clássica de sessão.
- */
 export default defineNuxtPlugin({
   name: '00.adapters',
   setup() {
     const config = useRuntimeConfig()
-    const { token } = useAuthToken()
 
-    const http = new FetchHttpAdapter(config.public.apiBase, () => token.value)
+    const http = new FetchHttpAdapter(config.public.apiBase)
 
     return {
       provide: {
         http,
         authRepository: new HttpAuthRepository(http),
+        userDirectory: new HttpUserDirectory(http),
+        ticketRepository: new HttpTicketRepository(http),
       },
     }
   },

@@ -8,12 +8,6 @@ use Illuminate\Database\Eloquent\Builder;
 
 class UserService
 {
-    /**
-     * Diretorio de pessoas. O filtro por papel existe porque o seletor de
-     * responsavel do cliente so pode oferecer quem a regra `ExistsAsGestor`
-     * aceita: `role = gestor`. Um administrador listado como responsavel vira
-     * 422 na hora de salvar.
-     */
     public function list(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $query = User::query();

@@ -13,12 +13,6 @@ class ListUsersRequest extends FormRequest
         return true;
     }
 
-    /**
-     * `per_page` e `page` ficam de fora de proposito: o diretorio reaproveita o
-     * mesmo clamp de `TicketController@index`, que limita em vez de recusar.
-     * Validar aqui transformaria `per_page=200` em 422,Mudando o contrato em
-     * relacao aos chamados sem necessidade.
-     */
     public function rules(): array
     {
         return [

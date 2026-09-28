@@ -1,18 +1,10 @@
 <script setup lang="ts">
 import { ApiError } from '~/modules/core/ports/http'
 import { isValid, validateRegister } from '~/modules/auth/utils/credentials'
-// `vue-sonner` exporta a função `toast`, não um composable `useToast`.
 import { toast } from 'vue-sonner'
 
 import type { RegisterDraft, RegisterErrors } from '~/modules/auth/utils/credentials'
 
-/**
- * Formulário de cadastro.
- *
- * Sem campo de papel, e isso é uma decisão de contrato: o `RegisterRequest` do
- * backend ignora `role` que venha no body, e o banco aplica `user`. Um seletor
- * de papel aqui só daria a ilusão de que dá para se cadastrar como gestor.
- */
 const draft = reactive<RegisterDraft>({
   name: '',
   email: '',
@@ -61,7 +53,7 @@ async function enviar(): Promise<void> {
   try {
     const session = await register({ ...draft })
 
-    toast.success(`Conta criada. Bem-vindo, ${session.user.name}.`)
+    toast.success(`Conta criada. Bem-vindo, ${session.name}.`)
 
     await router.push('/chamados')
   }
