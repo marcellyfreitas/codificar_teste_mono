@@ -124,7 +124,7 @@ const tempoRelativo = useTimeAgoIntl(
 
       <div class="flex items-center gap-1.5 flex-wrap">
         <TicketPriorityBadge :priority="ticket.priority" />
-        <span class="text-xs text-muted-foreground font-mono">#{{ ticket.id }}</span>
+        <span class="text-xs text-muted-foreground font-mono">{{ ticket.protocol }}</span>
       </div>
 
       <div class="flex items-center gap-1.5 text-xs text-muted-foreground">

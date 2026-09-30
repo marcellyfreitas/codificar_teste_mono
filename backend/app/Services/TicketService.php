@@ -44,7 +44,8 @@ class TicketService
         if ($search !== null) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('protocol', 'like', "%{$search}%");
             });
         }
 
@@ -84,6 +85,11 @@ class TicketService
         return DB::transaction(function () use ($ticket, $data) {
             try {
                 unset($data['user_id']);
+
+                // O protocolo identifica o chamado e nao pode ser reescrito
+                // depois de criado, senao a busca por ele passa a apontar
+                // para outro chamado.
+                unset($data['protocol']);
 
                 $ticket->update($data);
 

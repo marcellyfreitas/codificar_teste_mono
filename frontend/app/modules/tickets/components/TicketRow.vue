@@ -33,8 +33,8 @@ const tempoRelativo = useTimeAgoIntl(
 
 <template>
   <TableRow>
-    <TableCell class="font-mono text-xs text-muted-foreground">
-      #{{ ticket.id }}
+    <TableCell class="font-mono text-xs text-muted-foreground whitespace-nowrap">
+      {{ ticket.protocol }}
     </TableCell>
 
     <TableCell class="max-w-[240px]">

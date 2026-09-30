@@ -27,7 +27,7 @@ const tempoRelativo = useTimeAgoIntl(
   >
     <SheetContent class="w-96! sm:max-w-none! overflow-y-auto">
       <SheetHeader>
-        <SheetTitle>Chamado #{{ ticket?.id }}</SheetTitle>
+        <SheetTitle>Chamado {{ ticket?.protocol }}</SheetTitle>
         <SheetDescription>Detalhes do chamado.</SheetDescription>
       </SheetHeader>
 
@@ -35,6 +35,15 @@ const tempoRelativo = useTimeAgoIntl(
         v-if="ticket"
         class="px-4 space-y-4"
       >
+        <div>
+          <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+            Protocolo
+          </p>
+          <p class="text-sm font-mono">
+            {{ ticket.protocol }}
+          </p>
+        </div>
+
         <div>
           <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
             Título

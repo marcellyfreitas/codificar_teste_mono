@@ -173,6 +173,21 @@ const prioridades: TicketPriority[] = ['low', 'medium', 'high']
         @submit.prevent="enviar"
       >
         <div class="grid gap-4 px-4">
+          <Field v-if="modoEdicao && ticket">
+            <FieldLabel for="form-protocol">
+              Protocolo
+            </FieldLabel>
+            <Input
+              id="form-protocol"
+              :model-value="ticket.protocol"
+              class="font-mono"
+              disabled
+            />
+            <p class="text-xs text-muted-foreground">
+              O número é gerado na abertura do chamado e não pode ser alterado.
+            </p>
+          </Field>
+
           <Field :invalid="Boolean(errors.title?.length)">
             <FieldLabel for="form-title">
               Título <span class="text-destructive">*</span>

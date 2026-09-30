@@ -33,6 +33,7 @@ export const PRIORITY_LABEL: Record<TicketPriority, string> = {
 
 export interface Ticket {
   id: number,
+  protocol: string,
   title: string,
   description: string,
   status: TicketStatus,

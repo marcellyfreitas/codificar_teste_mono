@@ -13,7 +13,7 @@ const model = defineModel<string>({ required: true })
     <Input
       :model-value="model"
       type="search"
-      placeholder="Buscar título ou descrição…"
+      placeholder="Buscar por protocolo, título ou descrição…"
       class="pl-8"
       @update:model-value="model = String($event)"
     />

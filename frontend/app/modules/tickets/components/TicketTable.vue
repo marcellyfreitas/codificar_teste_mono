@@ -36,8 +36,8 @@ const truncada = computed(() => showing.value < total.value && lastPage.value ==
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead class="w-16">
-              #
+            <TableHead class="w-32">
+              Protocolo
             </TableHead>
             <TableHead>Título</TableHead>
             <TableHead>Status</TableHead>

@@ -98,6 +98,31 @@ it('ignora filtro de usuario que nao e numerico, em vez de quebrar', function ()
         ->assertJsonCount(2, 'data');
 });
 
+it('busca chamado pelo numero de protocolo', function (string $termo) {
+    listaComo();
+
+    $alvo = Ticket::factory()->create([
+        'title' => 'Impressora quebrada',
+        'protocol' => 'CH-2026-00420',
+    ]);
+
+    Ticket::factory()->create([
+        'title' => 'Teclado travando',
+        'protocol' => 'CH-2026-00421',
+    ]);
+
+    test()->getJson('/api/v1/tickets?search='.urlencode($termo))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $alvo->id)
+        ->assertJsonPath('data.0.protocol', 'CH-2026-00420');
+})->with([
+    'protocolo completo' => ['CH-2026-00420'],
+    'protocolo em caixa baixa' => ['ch-2026-00420'],
+    'apenas a sequencia' => ['00420'],
+    'apenas o ano e a sequencia' => ['2026-00420'],
+]);
+
 it('mantem os demais filtros intactos ao lado dos dois novos', function (string $campo, string $valor, int $esperados) {
     $g = User::factory()->gestor()->create();
 
