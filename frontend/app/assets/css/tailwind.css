@@ -1,8 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
+@layer theme, base, sonner, components, utilities;
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn-vue/tailwind.css";
+@import "vue-sonner/style.css" layer(sonner);
 
 @source "../../**/*.{vue,ts}";
 
