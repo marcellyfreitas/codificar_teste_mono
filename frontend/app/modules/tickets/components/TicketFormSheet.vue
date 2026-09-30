@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue'
 import type { Ticket, TicketStatus, TicketPriority } from '~/modules/tickets/ports/ticket-repository'
 import { TICKET_STATUSES, STATUS_LABEL, PRIORITY_LABEL } from '~/modules/tickets/ports/ticket-repository'
 import { ApiError } from '~/modules/core/ports/http'
+import { isManager as isGestorOuAdmin } from '~/modules/tickets/utils/permissions'
 const props = defineProps<{
   open: boolean,
   ticket: Ticket | null,
@@ -117,6 +118,12 @@ async function enviar() {
       if (draft.status && draft.status !== props.ticket.status) patch.status = draft.status
       if (draft.assignee_id !== props.ticket.assignee_id) patch.assignee_id = draft.assignee_id
 
+      // A API recusa `status` para quem não é gestor. Sem este filtro, o
+      // usuário comum veria um 422 sempre que o valor batesse com o do chamado.
+      if (!isManager.value) {
+        delete patch.status
+      }
+
       apiError = await update(props.ticket.id, patch)
     }
     else {
@@ -124,7 +131,7 @@ async function enviar() {
         title: draft.title,
         description: draft.description,
         priority: draft.priority as TicketPriority,
-        status: draft.status || undefined,
+        status: (isManager.value ? draft.status : '') || undefined,
         assignee_id: draft.assignee_id,
         auto_assign: false,
       })
@@ -146,6 +153,10 @@ async function enviar() {
 }
 
 const prioridades: TicketPriority[] = ['low', 'medium', 'high']
+
+// O `status` é campo de gestor: a API recusa com 422 quem não o é.
+const { user } = useSession()
+const isManager = computed(() => (user.value ? isGestorOuAdmin(user.value) : false))
 </script>
 
 <template>
@@ -241,7 +252,10 @@ const prioridades: TicketPriority[] = ['low', 'medium', 'high']
             <FieldError :errors="errors.priority" />
           </Field>
 
-          <Field :invalid="Boolean(errors.status?.length)">
+          <Field
+            v-if="isManager"
+            :invalid="Boolean(errors.status?.length)"
+          >
             <FieldLabel>Status</FieldLabel>
             <Select
               :model-value="draft.status || 'default'"
@@ -275,6 +289,17 @@ const prioridades: TicketPriority[] = ['low', 'medium', 'high']
               @update:model-value="limparErro('assignee_id')"
             />
             <FieldError :errors="errors.assignee_id" />
+            <p class="text-xs text-muted-foreground flex gap-1.5">
+              <Icon
+                icon="lucide:info"
+                class="mt-px size-3.5 shrink-0"
+              />
+              <span>
+                A escolha é uma preferência, não uma garantia. Se a demanda
+                do gestor escolhido estiver alta no momento, o chamado pode
+                ser redistribuído automaticamente para outro responsável.
+              </span>
+            </p>
           </Field>
         </div>
 
