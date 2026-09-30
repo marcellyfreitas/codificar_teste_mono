@@ -49,6 +49,8 @@ touch database/database.sqlite
 
 php artisan migrate --seed
 
+php artisan serve
+
 # http://localhost:8000
 ```
 
