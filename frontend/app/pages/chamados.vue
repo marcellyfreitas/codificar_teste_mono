@@ -12,6 +12,7 @@ useHead({ title: 'Chamados · Painel de Chamados' })
 
 const filters = useTicketFilters()
 const { page, loading, error, load, reload } = useTicketList()
+const { reload: reloadBoard } = useTicketBoard()
 const { advance } = useTicketActions()
 
 watch(
@@ -21,7 +22,7 @@ watch(
 )
 
 type Aba = 'lista' | 'quadro'
-const aba = ref<Aba>('lista')
+const aba = ref<Aba>('quadro')
 
 const ticketAtivo = ref<Ticket | null>(null)
 
@@ -66,12 +67,12 @@ async function aoRetornar(ticket: Ticket) {
 
 async function aoSalvar() {
   formAberto.value = false
-  await reload()
+  await Promise.all([reload(), reloadBoard()])
 }
 
 async function aoExcluir() {
   excluirAberto.value = false
-  await reload()
+  await Promise.all([reload(), reloadBoard()])
 }
 </script>
 
@@ -114,13 +115,6 @@ async function aoExcluir() {
       @update:model-value="aba = $event as Aba"
     >
       <TabsList>
-        <TabsTrigger value="lista">
-          <Icon
-            icon="lucide:list"
-            class="size-4 mr-1.5"
-          />
-          Lista
-        </TabsTrigger>
         <TabsTrigger value="quadro">
           <Icon
             icon="lucide:layout-dashboard"
@@ -128,7 +122,25 @@ async function aoExcluir() {
           />
           Quadro
         </TabsTrigger>
+        <TabsTrigger value="lista">
+          <Icon
+            icon="lucide:list"
+            class="size-4 mr-1.5"
+          />
+          Lista
+        </TabsTrigger>
       </TabsList>
+
+      <TabsContent value="quadro">
+        <TicketBoard
+          :filters="filters.params.value"
+          @avancar="aoAvancar"
+          @retornar="aoRetornar"
+          @editar="abrirEditar"
+          @excluir="abrirExcluir"
+          @ver="abrirVer"
+        />
+      </TabsContent>
 
       <TabsContent value="lista">
         <TicketTable
@@ -140,17 +152,6 @@ async function aoExcluir() {
           @editar="abrirEditar"
           @excluir="abrirExcluir"
           @update:page="filters.page.value = $event"
-        />
-      </TabsContent>
-
-      <TabsContent value="quadro">
-        <TicketBoard
-          :filters="filters.params.value"
-          @avancar="aoAvancar"
-          @retornar="aoRetornar"
-          @editar="abrirEditar"
-          @excluir="abrirExcluir"
-          @ver="abrirVer"
         />
       </TabsContent>
     </Tabs>
