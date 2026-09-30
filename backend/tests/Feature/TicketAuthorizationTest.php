@@ -16,10 +16,16 @@ function usuarioComPapel(UserRole $papel): User
 
 function chamadoDeUmGestor(array $atributos = []): Ticket
 {
+    // O autor é fixo e nunca é quem está acting: como o dono de um chamado
+    // aberto pode editá-lo, deixar o factory sortear o autor tornaria
+    // flutuante qualquer teste de negação.
+    $autor = User::factory()->regular()->create();
+
     return Ticket::factory()
+        ->createdBy($autor)
         ->forAssignee(User::factory()->gestor()->create())
         ->open()
-        ->create($atributos);
+        ->create($atributos + ['status' => 'open']);
 }
 
 it('recusa exclusao por usuario comum', function () {
@@ -69,14 +75,16 @@ it('recusa exclusao de chamado inexistente para usuario comum com 403', function
     test()->deleteJson('/api/v1/tickets/999999')->assertNotFound();
 });
 
-it('recusa edicao por usuario comum', function () {
-    Sanctum::actingAs(usuarioComPapel(UserRole::USER));
+it('recusa edicao de chamado que o usuario comum nao abriu', function () {
+    $comum = usuarioComPapel(UserRole::USER);
+
+    Sanctum::actingAs($comum);
 
     $ticket = chamadoDeUmGestor(['title' => 'Titulo original']);
 
     test()->putJson("/api/v1/tickets/{$ticket->id}", ['title' => 'Hackeado'])
         ->assertForbidden()
-        ->assertJsonPath('message', 'Apenas gestores e administradores podem editar chamados.');
+        ->assertJsonPath('message', 'Você só pode editar os chamados que abriu.');
 
     expect($ticket->fresh()->title)->toBe('Titulo original');
 });
@@ -86,7 +94,11 @@ it('recusa edicao de status por usuario comum', function () {
 
     $ticket = chamadoDeUmGestor(['status' => 'open']);
 
-    test()->putJson("/api/v1/tickets/{$ticket->id}", ['status' => 'closed'])->assertForbidden();
+    // A validação roda antes da policy, então o status chega barrado como
+    // campo proibido — e não como 403 de autorização.
+    test()->putJson("/api/v1/tickets/{$ticket->id}", ['status' => 'closed'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('status');
 
     expect($ticket->fresh()->status)->toBe('open');
 });
@@ -100,6 +112,90 @@ it('recusa reatribuicao de responsavel por usuario comum', function () {
     test()->putJson("/api/v1/tickets/{$ticket->id}", ['assignee_id' => $gestor->id])->assertForbidden();
 
     expect($ticket->fresh()->assignee_id)->not->toBe($gestor->id);
+});
+
+it('permite ao usuario comum editar o proprio chamado aberto', function () {
+    $comum = usuarioComPapel(UserRole::USER);
+
+    $ticket = Ticket::factory()
+        ->createdBy($comum)
+        ->create(['status' => 'open', 'title' => 'Titulo original']);
+
+    Sanctum::actingAs($comum);
+
+    test()->putJson("/api/v1/tickets/{$ticket->id}", [
+        'title' => 'Titulo corrigido pelo dono',
+        'description' => 'Detalhe revisado.',
+        'priority' => 'high',
+    ])->assertOk();
+
+    expect($ticket->fresh())
+        ->title->toBe('Titulo corrigido pelo dono')
+        ->description->toBe('Detalhe revisado.')
+        ->priority->toBe('high');
+});
+
+it('recusa edicao do proprio chamado quando nao esta mais aberto', function (string $status) {
+    $comum = usuarioComPapel(UserRole::USER);
+
+    $ticket = Ticket::factory()
+        ->createdBy($comum)
+        ->create(['status' => $status, 'title' => 'Titulo original']);
+
+    Sanctum::actingAs($comum);
+
+    test()->putJson("/api/v1/tickets/{$ticket->id}", ['title' => 'Hackeado'])
+        ->assertForbidden()
+        ->assertJsonPath('message', 'Você só pode editar o chamado enquanto ele estiver aberto.');
+
+    expect($ticket->fresh()->title)->toBe('Titulo original');
+})->with(['in_progress', 'resolved', 'closed']);
+
+it('recusa mudanca de status pelo usuario comum no proprio chamado', function () {
+    $comum = usuarioComPapel(UserRole::USER);
+
+    $ticket = Ticket::factory()->createdBy($comum)->create(['status' => 'open']);
+
+    Sanctum::actingAs($comum);
+
+    test()->putJson("/api/v1/tickets/{$ticket->id}", ['status' => 'closed'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('status')
+        ->assertJsonPath(
+            'errors.status.0',
+            'O campo status só pode ser alterado por gestores e administradores.',
+        );
+
+    expect($ticket->fresh()->status)->toBe('open');
+});
+
+it('permite ao usuario comum escolher o responsavel do proprio chamado aberto', function () {
+    $comum = usuarioComPapel(UserRole::USER);
+    $gestor = User::factory()->gestor()->create();
+
+    $ticket = Ticket::factory()->createdBy($comum)->create(['status' => 'open']);
+
+    Sanctum::actingAs($comum);
+
+    test()->putJson("/api/v1/tickets/{$ticket->id}", ['assignee_id' => $gestor->id])
+        ->assertOk();
+
+    expect($ticket->fresh()->assignee_id)->toBe($gestor->id);
+});
+
+it('recita responsavel que nao e gestor, mesmo para o proprio chamado', function () {
+    $comum = usuarioComPapel(UserRole::USER);
+    $outro = User::factory()->regular()->create();
+
+    $ticket = Ticket::factory()->createdBy($comum)->create(['status' => 'open']);
+
+    Sanctum::actingAs($comum);
+
+    test()->putJson("/api/v1/tickets/{$ticket->id}", ['assignee_id' => $outro->id])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('assignee_id');
+
+    expect($ticket->fresh()->assignee_id)->not->toBe($outro->id);
 });
 
 it('permite edicao por gestor', function () {
@@ -165,10 +261,57 @@ it('aplica a matriz de permissoes da policy', function (UserRole $papel, bool $e
     expect($gate->allows('update', $ticket))->toBe($edita)
         ->and($gate->allows('delete', $ticket))->toBe($exclui);
 })->with([
-    'comum: nao edita nem exclui' => [UserRole::USER, false, false],
+    'comum: nao edita chamado alheio' => [UserRole::USER, false, false],
     'gestor: edita e exclui' => [UserRole::GESTOR, true, true],
     'admin: edita e exclui' => [UserRole::ADMIN, true, true],
 ]);
+
+it('liberia o usuario comum so no proprio chamado aberto', function (string $status, bool $edita) {
+    $comum = usuarioComPapel(UserRole::USER);
+
+    $ticket = Ticket::factory()->createdBy($comum)->create(['status' => $status]);
+
+    expect(Gate::forUser($comum)->allows('update', $ticket))->toBe($edita);
+})->with([
+    'aberto' => ['open', true],
+    'em andamento' => ['in_progress', false],
+    'resolvido' => ['resolved', false],
+    'finalizado' => ['closed', false],
+]);
+
+// `TicketFactory::open()` sorteia entre `open` e `in_progress`. Onde o status
+// decide o resultado, ele precisa ser fixado — senão o teste passa ou falha
+// conforme o sorteio.
+it('decide o acesso pelo status fixo do chamado', function (string $status, int $codigo) {
+    $comum = usuarioComPapel(UserRole::USER);
+
+    $ticket = Ticket::factory()
+        ->createdBy($comum)
+        ->create(['status' => $status, 'title' => 'Titulo original']);
+
+    Sanctum::actingAs($comum);
+
+    test()->putJson("/api/v1/tickets/{$ticket->id}", ['title' => 'Outro titulo'])
+        ->assertStatus($codigo);
+
+    expect($ticket->fresh()->title)
+        ->toBe($codigo === 200 ? 'Outro titulo' : 'Titulo original');
+})->with([
+    'aberto: edita' => ['open', 200],
+    'em andamento: barrado' => ['in_progress', 403],
+    'resolvido: barrado' => ['resolved', 403],
+    'finalizado: barrado' => ['closed', 403],
+]);
+
+it('libera o gestor em qualquer status, mesmo sem ser o dono', function (string $status) {
+    $gestor = usuarioComPapel(UserRole::GESTOR);
+
+    $ticket = Ticket::factory()
+        ->createdBy(User::factory()->regular()->create())
+        ->create(['status' => $status]);
+
+    expect(Gate::forUser($gestor)->allows('update', $ticket))->toBeTrue();
+})->with(['open', 'in_progress', 'resolved', 'closed']);
 
 it('nega em silencio se o usuario for passado como primeiro argumento', function () {
     $gestor = usuarioComPapel(UserRole::GESTOR);
