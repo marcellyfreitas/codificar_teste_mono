@@ -15,7 +15,7 @@ enum TicketStatus: string
             self::OPEN => 'Aberto',
             self::IN_PROGRESS => 'Em Andamento',
             self::RESOLVED => 'Resolvido',
-            self::CLOSED => 'Fechado',
+            self::CLOSED => 'Finalizado',
         };
     }
 

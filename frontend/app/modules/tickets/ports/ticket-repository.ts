@@ -22,7 +22,7 @@ export const STATUS_LABEL: Record<TicketStatus, string> = {
   open: 'Aberto',
   in_progress: 'Em andamento',
   resolved: 'Resolvido',
-  closed: 'Fechado',
+  closed: 'Finalizado',
 }
 
 export const PRIORITY_LABEL: Record<TicketPriority, string> = {

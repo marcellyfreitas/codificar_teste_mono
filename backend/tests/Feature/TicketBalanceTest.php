@@ -386,18 +386,18 @@ it('remove tambem os in_progress', function () {
     expect(Ticket::query()->whereNotNull('assignee_id')->count())->toBe(0);
 });
 
-it('mantem o responsavel de resolvidos e fechados', function () {
+it('mantem o responsavel de resolvidos e finalizados', function () {
     $gestor = novoGestor();
 
     $resolvido = Ticket::factory()->forAssignee($gestor)->create(['status' => 'resolved']);
-    $fechado = Ticket::factory()->forAssignee($gestor)->create(['status' => 'closed']);
+    $finalizado = Ticket::factory()->forAssignee($gestor)->create(['status' => 'closed']);
 
     actedAsAdmin();
 
     removerResponsaveis()->assertOk()->assertJsonPath('data.affected', 0);
 
     expect($resolvido->fresh()->assignee_id)->toBe($gestor->id)
-        ->and($fechado->fresh()->assignee_id)->toBe($gestor->id);
+        ->and($finalizado->fresh()->assignee_id)->toBe($gestor->id);
 });
 
 it('conta apenas os chamados que tinham responsavel', function () {
