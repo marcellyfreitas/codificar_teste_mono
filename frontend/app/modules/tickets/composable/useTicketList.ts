@@ -30,11 +30,23 @@ export function useTicketList() {
     await load(lastParams.value)
   }
 
+  /**
+   * Devolve o estado ao valor inicial. Usado ao encerrar a sessao: a pagina
+   * guarda chamado de um usuario escopado a sessao anterior.
+   */
+  function reset(): void {
+    page.value = toPage<Ticket>(null)
+    loading.value = false
+    error.value = null
+    lastParams.value = {}
+  }
+
   return {
     page: readonly(page),
     loading: readonly(loading),
     error: readonly(error),
     load,
     reload,
+    reset,
   }
 }

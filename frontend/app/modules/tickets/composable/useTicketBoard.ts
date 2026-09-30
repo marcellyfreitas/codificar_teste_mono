@@ -5,14 +5,16 @@ import { toPage } from '~/modules/core/utils/response'
 
 export type BoardColumns = Record<TicketStatus, Paginated<Ticket>>
 
+function colunasVazias(): BoardColumns {
+  return Object.fromEntries(
+    TICKET_STATUSES.map(s => [s, toPage<Ticket>(null)]),
+  ) as BoardColumns
+}
+
 export function useTicketBoard() {
   const { $ticketRepository } = useNuxtApp()
 
-  const columns = useState<BoardColumns>('tickets:board', () =>
-    Object.fromEntries(
-      TICKET_STATUSES.map(s => [s, toPage<Ticket>(null)]),
-    ) as BoardColumns,
-  )
+  const columns = useState<BoardColumns>('tickets:board', colunasVazias)
 
   const loading = useState<boolean>('tickets:board:loading', () => false)
   const lastFilters = useState<Omit<TicketListParams, 'status' | 'page' | 'per_page'>>(
@@ -83,11 +85,22 @@ export function useTicketBoard() {
     }
   }
 
+  /**
+   * Esvazia as colunas. Usado ao encerrar a sessao: um quadro carregado por
+   * um admin mostra chamados que um gestor nao enxerga.
+   */
+  function reset(): void {
+    columns.value = colunasVazias()
+    loading.value = false
+    lastFilters.value = {}
+  }
+
   return {
     columns: readonly(columns),
     loading: readonly(loading),
     load,
     reload,
     moveTicket,
+    reset,
   }
 }

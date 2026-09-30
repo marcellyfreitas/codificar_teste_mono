@@ -18,6 +18,15 @@ export function useSession() {
 
   function forget(): void {
     user.value = null
+
+    // Tudo que vive em `useState` sobrevive a navegacao e escopa por sessao:
+    // chamado, quadro e diretorio sao carregados sob o papel de quem logou.
+    // Sem esta limpeza, o proximo usuario enxerga os dados do anterior ate a
+    // proxima busca responder. Ao criar um cache novo em `useState`, inclua o
+    // `reset()` dele aqui.
+    useTicketList().reset()
+    useTicketBoard().reset()
+    useUserDirectory().reset()
   }
 
   async function login(credentials: Credentials): Promise<User> {
@@ -62,6 +71,8 @@ export function useSession() {
       await $fetch('/api/v1/logout', { method: 'POST' })
     }
     catch {
+      // Encerrar localmente mesmo se o servidor nao responder: negar a saida
+      // e pior do que deixar um token morto para tras.
     }
     finally {
       forget()

@@ -45,6 +45,17 @@ export function useUserDirectory() {
     }
   }
 
+  /**
+   * Devolve o diretorio ao valor inicial. Usado ao encerrar a sessao: a lista
+   * de usuarios e escopada ao papel de quem esta logado.
+   */
+  function reset(): void {
+    gestores.value = toPage<User>(null)
+    todos.value = toPage<User>(null)
+    loading.value = false
+    error.value = null
+  }
+
   return {
     gestores: readonly(gestores),
     todos: readonly(todos),
@@ -52,5 +63,6 @@ export function useUserDirectory() {
     error: readonly(error),
     fetchGestores,
     fetchAll,
+    reset,
   }
 }
