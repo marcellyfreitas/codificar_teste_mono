@@ -61,11 +61,15 @@ async function enviar(): Promise<void> {
     if (error instanceof ApiError && error.isValidation) {
       Object.assign(errors, errorsFor(error))
 
+      toast.error(messageOf(error))
+
       return
     }
 
     if (error instanceof ApiError && error.isUnauthenticated) {
       Object.assign(errors, { email: error.message })
+
+      toast.error(error.message)
 
       return
     }
