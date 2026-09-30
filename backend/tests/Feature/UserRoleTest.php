@@ -102,11 +102,11 @@ it('cria a quantidade de usuarios de cada papel no seeder', function () {
         );
 });
 
-it('cria pelo menos 50 gestores no seeder', function () {
+it('cria pelo menos a quantidade de gestores do seeder', function () {
     $this->seed(UserSeeder::class);
 
     expect(User::query()->where('role', UserRole::GESTOR->value)->count())
-        ->toBeGreaterThanOrEqual(50);
+        ->toBeGreaterThanOrEqual(UserSeeder::GESTOR_USERS);
 });
 
 it('mantem a conta de teste da colecao Postman', function () {

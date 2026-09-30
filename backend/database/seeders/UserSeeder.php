@@ -10,9 +10,9 @@ class UserSeeder extends Seeder
 {
     public const REGULAR_USERS = 100;
 
-    public const GESTOR_USERS = 50;
+    public const GESTOR_USERS = 10;
 
-    public const ADMIN_USERS = 10;
+    public const ADMIN_USERS = 3;
 
     public const TEST_USER_EMAIL = 'test@example.com';
 
