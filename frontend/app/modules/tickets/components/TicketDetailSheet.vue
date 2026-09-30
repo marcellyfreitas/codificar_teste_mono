@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTimeAgo } from '@vueuse/core'
+import { useTimeAgoIntl } from '@vueuse/core'
 import type { Ticket } from '~/modules/tickets/ports/ticket-repository'
 import { STATUS_LABEL, PRIORITY_LABEL } from '~/modules/tickets/ports/ticket-repository'
 import { absoluteDate } from '~/modules/tickets/utils/format'
@@ -14,8 +14,9 @@ const emit = defineEmits<{
   'update:open': [v: boolean],
 }>()
 
-const tempoRelativo = useTimeAgo(() =>
-  props.ticket ? new Date(props.ticket.created_at) : new Date(),
+const tempoRelativo = useTimeAgoIntl(
+  () => (props.ticket ? new Date(props.ticket.created_at) : new Date()),
+  { locale: 'pt-BR', relativeTimeFormatOptions: { numeric: 'always' } },
 )
 </script>
 

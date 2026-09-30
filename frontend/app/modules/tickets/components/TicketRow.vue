@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTimeAgo } from '@vueuse/core'
+import { useTimeAgoIntl } from '@vueuse/core'
 import { Icon } from '@iconify/vue'
 import type { Ticket } from '~/modules/tickets/ports/ticket-repository'
 import { absoluteDate, truncate } from '~/modules/tickets/utils/format'
@@ -25,7 +25,10 @@ const podeMover = computed(() => user.value ? canAdvanceTicket(user.value) : fal
 const podeAvancar = computed(() => podeMover.value && nextStatus(props.ticket.status) !== null)
 const podeRetornar = computed(() => podeMover.value && prevStatus(props.ticket.status) !== null)
 
-const tempoRelativo = useTimeAgo(() => new Date(props.ticket.created_at))
+const tempoRelativo = useTimeAgoIntl(
+  () => new Date(props.ticket.created_at),
+  { locale: 'pt-BR', relativeTimeFormatOptions: { numeric: 'always' } },
+)
 </script>
 
 <template>
