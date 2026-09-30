@@ -142,6 +142,9 @@ Cria um chamado. O autor é sempre o usuário do token.
 
 > Se `auto_assign` for `true` e `assignee_id` não for informado, o sistema atribui ao gestor com menor carga.
 > `assignee_id` com papel `admin` retorna `422`.
+> `status` só é aceito de gestor ou admin; para usuário comum retorna `422`.
+> O `assignee_id` escolhido é uma preferência: `POST /tickets/balance` pode
+> redistribuir o chamado depois, conforme a demanda do gestor.
 
 **Resposta `201`**
 ```json
@@ -173,9 +176,24 @@ regra da listagem).
 
 ---
 
-### 🔒 `PUT /tickets/{id}` — gestor ou admin
+### 🔒 `PUT /tickets/{id}`
 
 Atualiza campos do chamado. Todos os campos são opcionais (parcial).
+
+**Quem pode editar**
+
+| Papel | Pode editar |
+|---|---|
+| `admin` | qualquer chamado |
+| `gestor` | qualquer chamado |
+| `user` | **apenas o próprio chamado, e somente enquanto `open`** |
+
+O usuário comum não altera o `status`: editar o conteúdo do pedido não é conduzir
+o atendimento. A validação do campo roda antes da policy, então um `status`
+enviado por ele retorna `422`, e não `403`.
+
+A escolha de `assignee_id` pelo usuário comum é uma preferência, não garantia —
+`POST /tickets/balance` pode redistribuir o chamado depois conforme a demanda.
 
 **Body**
 ```json
@@ -183,8 +201,8 @@ Atualiza campos do chamado. Todos os campos são opcionais (parcial).
   "title": "string (opcional, máx. 255)",
   "description": "string (opcional)",
   "priority": "low | medium | high (opcional)",
-  "status": "open | in_progress | resolved | closed (opcional)",
-  "assignee_id": "int | null (opcional)"
+  "status": "open | in_progress | resolved | closed (opcional, só gestor/admin)",
+  "assignee_id": "int | null (opcional, precisa ser gestor)"
 }
 ```
 
@@ -197,7 +215,10 @@ Atualiza campos do chamado. Todos os campos são opcionais (parcial).
 ```
 
 **Erros**
-- `403` — usuário sem permissão: `"Apenas gestores e administradores podem editar chamados."`
+- `403` — sem permissão:
+  - `"Você só pode editar os chamados que abriu."`
+  - `"Você só pode editar o chamado enquanto ele estiver aberto."`
+- `422` — `status` enviado por usuário comum, ou `assignee_id` que não é gestor
 
 ---
 
