@@ -120,7 +120,7 @@ class TicketController extends Controller
 
         try {
             return response()->json([
-                'message' => 'Responsáveis removidos dos chamados em aberto.',
+                'message' => 'Responsáveis removidos dos chamados abertos.',
                 'data' => [
                     'affected' => $unassign(),
                 ],

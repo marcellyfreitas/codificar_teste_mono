@@ -249,12 +249,14 @@ Distribui todos os chamados sem responsável entre os gestores, um a um, para o 
 
 ### 🔒 `POST /tickets/unassign-open` — admin
 
-Remove o responsável de todos os chamados com status `open` ou `in_progress`.
+Remove o responsável de todos os chamados com status `open`.
+
+Chamados `in_progress`, `resolved` e `closed` mantêm o responsável.
 
 **Resposta `200`**
 ```json
 {
-  "message": "Responsáveis removidos dos chamados em aberto.",
+  "message": "Responsáveis removidos dos chamados abertos.",
   "data": { "affected": 705 }
 }
 ```

@@ -132,9 +132,9 @@ function alternarOrdem(key: SortKey) {
             Desatribuir chamados
           </CardTitle>
           <CardDescription>
-            Remove o responsável de todos os chamados em aberto
-            (<code>open</code> + <code>in_progress</code>). Chamados resolvidos
-            ou fechados mantêm o responsável.
+            Remove o responsável de todos os chamados com status
+            <code>open</code>. Chamados em andamento, resolvidos ou
+            finalizados mantêm o responsável.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -324,10 +324,11 @@ function alternarOrdem(key: SortKey) {
           <AlertDialogDescription class="space-y-2">
             <p>
               Esta ação remove o responsável de <strong>todos</strong> os chamados
-              com status <code>open</code> ou <code>in_progress</code>.
+              com status <code>open</code>.
             </p>
             <p>
-              Chamados resolvidos ou fechados não são afetados.
+              Chamados em andamento (<code>in_progress</code>), resolvidos ou
+              finalizados não são afetados.
               Após desatribuir, use <strong>Redistribuir</strong> para
               realocar a fila do zero.
             </p>

@@ -373,17 +373,18 @@ it('remove o responsavel de todos os chamados abertos', function () {
         ->and(cargaDe($b))->toBe(0);
 });
 
-it('remove tambem os in_progress', function () {
+it('mantem o responsavel dos in_progress', function () {
     $gestor = novoGestor();
 
-    Ticket::factory()->forAssignee($gestor)->create(['status' => 'in_progress']);
-    Ticket::factory()->forAssignee($gestor)->create(['status' => 'open']);
+    $emAndamento = Ticket::factory()->forAssignee($gestor)->create(['status' => 'in_progress']);
+    $aberto = Ticket::factory()->forAssignee($gestor)->create(['status' => 'open']);
 
     actedAsAdmin();
 
-    removerResponsaveis()->assertOk()->assertJsonPath('data.affected', 2);
+    removerResponsaveis()->assertOk()->assertJsonPath('data.affected', 1);
 
-    expect(Ticket::query()->whereNotNull('assignee_id')->count())->toBe(0);
+    expect($aberto->fresh()->assignee_id)->toBeNull()
+        ->and($emAndamento->fresh()->assignee_id)->toBe($gestor->id);
 });
 
 it('mantem o responsavel de resolvidos e finalizados', function () {

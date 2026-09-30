@@ -180,8 +180,12 @@ class TicketService
     {
         return DB::transaction(function () {
             try {
+                // A regra alcanca apenas o status `open`. O `in_progress` fica
+                // de fora de proposito: quem esta em andamento ja tem um
+                // responsavel trabalhando e perder o vinculo no meio do
+                // atendimento quebraria a continuidade.
                 return Ticket::query()
-                    ->whereIn('status', TicketStatus::openStatuses())
+                    ->where('status', TicketStatus::OPEN->value)
                     ->whereNotNull('assignee_id')
                     ->update(['assignee_id' => null]);
             } catch (Exception $e) {
