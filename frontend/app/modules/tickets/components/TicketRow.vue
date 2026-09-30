@@ -18,7 +18,9 @@ const emit = defineEmits<{
 
 const { user } = useSession()
 
-const podeEditar = computed(() => user.value ? canEditTicket(user.value) : false)
+const podeEditar = computed(() =>
+  user.value ? canEditTicket(user.value, props.ticket) : false,
+)
 const podeExcluir = computed(() => user.value ? canDeleteTicket(user.value) : false)
 
 const podeMover = computed(() => user.value ? canAdvanceTicket(user.value) : false)
